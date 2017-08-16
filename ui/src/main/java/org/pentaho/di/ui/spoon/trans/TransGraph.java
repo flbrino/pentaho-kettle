@@ -130,6 +130,7 @@ import org.pentaho.di.trans.TransHopMeta;
 import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.TransPainter;
 import org.pentaho.di.trans.ael.adapters.TransEngineAdapter;
+import org.pentaho.di.trans.ael.adapters.TransWebSocketEngineAdapter;
 import org.pentaho.di.trans.debug.BreakPointListener;
 import org.pentaho.di.trans.debug.StepDebugMeta;
 import org.pentaho.di.trans.debug.TransDebugMeta;
@@ -5016,16 +5017,22 @@ public class TransGraph extends AbstractGraph implements XulEventHandler, Redraw
       log.logBasic( "Using legacy execution engine" );
       return createLegacyTrans();
     }
+    int daemonVersion = 2;
 
-    return PluginRegistry.getInstance().getPlugins( EnginePluginType.class ).stream()
-      .filter( useThisEngine() )
-      .findFirst()
-      .map( plugin -> (Engine) loadPlugin( plugin ) )
-      .map( engine -> {
-        log.logBasic( "Using execution engine " + engine.getClass().getCanonicalName() );
-        return (Trans) new TransEngineAdapter( engine, transMeta );
-      } )
-      .orElseThrow( () -> new KettleException( "Unable to find engine [" + transMeta.getVariable( "engine" ) + "]" ) );
+    if(daemonVersion == 2) {
+      return new TransWebSocketEngineAdapter(null, transMeta);
+    }
+    else {
+      return PluginRegistry.getInstance().getPlugins(EnginePluginType.class).stream()
+        .filter(useThisEngine())
+        .findFirst()
+        .map(plugin -> (Engine) loadPlugin(plugin))
+        .map(engine -> {
+          log.logBasic("Using execution engine " + engine.getClass().getCanonicalName());
+          return (Trans) new TransEngineAdapter(engine, transMeta);
+        })
+        .orElseThrow(() -> new KettleException("Unable to find engine [" + transMeta.getVariable("engine") + "]"));
+    }
   }
 
   /**

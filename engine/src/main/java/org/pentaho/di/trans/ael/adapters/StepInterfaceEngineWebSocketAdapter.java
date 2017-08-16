@@ -1,0 +1,155 @@
+/*
+ * ! ******************************************************************************
+ *
+ *  Pentaho Data Integration
+ *
+ *  Copyright (C) 2002-2017 by Pentaho : http://www.pentaho.com
+ *
+ * ******************************************************************************
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with
+ *  the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * *****************************************************************************
+ */
+
+package org.pentaho.di.trans.ael.adapters;
+
+import org.pentaho.di.core.exception.KettleStepException;
+import org.pentaho.di.core.row.RowMetaInterface;
+import org.pentaho.di.engine.api.ExecutionContext;
+import org.pentaho.di.engine.api.events.PDIEvent;
+import org.pentaho.di.engine.api.model.Operation;
+import org.pentaho.di.engine.api.model.Row;
+import org.pentaho.di.engine.api.model.Rows;
+import org.pentaho.di.engine.api.remote.Message;
+import org.pentaho.di.engine.api.reporting.Metrics;
+import org.pentaho.di.engine.api.reporting.Status;
+import org.pentaho.di.trans.Trans;
+import org.pentaho.di.trans.TransMeta;
+import org.pentaho.di.trans.step.BaseStep;
+import org.pentaho.di.trans.step.RowListener;
+import org.pentaho.di.trans.step.StepDataInterface;
+import org.pentaho.di.trans.step.StepMeta;
+
+import java.util.Collections;
+
+import static org.pentaho.di.engine.api.model.Rows.TYPE.OUT;
+import static org.pentaho.di.engine.api.reporting.Status.*;
+
+/**
+ * Adapts AEL Operation events to the StepInterface.
+ * This class will subscribe to engine events and translate them
+ * to corresponding StepInterface updates.
+ */
+public class StepInterfaceEngineWebSocketAdapter extends BaseStep {
+
+  private final Operation operation;
+  private final DaemonMessagesClientEndpoint daemonMessagesClientEndpoint;
+
+  public StepInterfaceEngineWebSocketAdapter(Operation op, DaemonMessagesClientEndpoint daemonMessagesClientEndpoint, StepMeta stepMeta,
+                                             TransMeta transMeta, StepDataInterface dataInterface, Trans trans ) {
+    super( stepMeta, dataInterface, 0, transMeta, trans );
+    operation = op;
+    this.daemonMessagesClientEndpoint = daemonMessagesClientEndpoint;
+    setInputRowSets( Collections.emptyList() );
+    setOutputRowSets( Collections.emptyList() );
+    init();
+  }
+
+  @Override public void dispatch() {
+    // No thanks. I'll take it from here.
+  }
+
+  private void init() {
+    createHandlerToMetrics();
+    createHandlerToStatus();
+    createHandlerToRows();
+  }
+
+  private void createHandlerToRows() {
+    daemonMessagesClientEndpoint.addMessageHandler(DaemonMessagesClientEndpoint.HandlerType.ROWS, operation.getId(), new DaemonMessagesClientEndpoint.MessageHandler() {
+      @Override
+      public void handleMessage(Message message) {
+        PDIEvent<Operation, Rows> data = (PDIEvent<Operation, Rows>)message;
+        if ( data.getData().getType().equals( OUT ) ) {
+          data.getData().stream().forEach(r ->  putRow(r) );
+        }
+      }
+    });
+  }
+
+  private void createHandlerToStatus() {
+    daemonMessagesClientEndpoint.addMessageHandler(DaemonMessagesClientEndpoint.HandlerType.OPERATION_STATUS, operation.getId(), new DaemonMessagesClientEndpoint.MessageHandler() {
+      @Override
+      public void handleMessage(Message message) {
+        PDIEvent<Operation, Status> data = (PDIEvent<Operation, Status>)message;
+        switch ( data.getData() ) {
+          case RUNNING:
+            StepInterfaceEngineWebSocketAdapter.this.setRunning( true );
+            break;
+          case PAUSED:
+            StepInterfaceEngineWebSocketAdapter.this.setPaused( true );
+            break;
+          case STOPPED:
+            StepInterfaceEngineWebSocketAdapter.this.setStopped( true );
+            break;
+          case FAILED:
+          case FINISHED:
+            StepInterfaceEngineWebSocketAdapter.this.setRunning( false );
+            break;
+        }
+      }
+    });
+  }
+
+  private void createHandlerToMetrics() {
+    daemonMessagesClientEndpoint.addMessageHandler(DaemonMessagesClientEndpoint.HandlerType.METRICS, operation.getId(), new DaemonMessagesClientEndpoint.MessageHandler() {
+      @Override
+      public void handleMessage(Message message) {
+        PDIEvent<Operation, Metrics> data = (PDIEvent<Operation, Metrics>)message;
+
+        StepInterfaceEngineWebSocketAdapter.this.setLinesRead( data.getData().getIn() );
+        StepInterfaceEngineWebSocketAdapter.this.setLinesWritten( data.getData().getOut() );
+      }
+    });
+  }
+
+  /**
+   * Writes a Row to all rowListeners
+   **/
+  private void putRow( Row row ) {
+    //TODO:implement
+    return;
+    /*
+    try {
+      if ( executionRequest.getConversionManager() == null ) {
+        // no way to convert this row to a RowMetaInterface.
+        return;
+      }
+      synchronized ( rowListeners ) {
+        for ( int i = 0; i < rowListeners.size(); i++ ) {
+          RowListener rowListener = rowListeners.get( i );
+          rowListener.rowWrittenEvent(
+            executionContext.getConversionManager().convert( row, RowMetaInterface.class ),
+            row.getObjects() );
+        }
+      }
+    } catch ( KettleStepException e ) {
+      // log that we were unable to convert row.
+      // will probably want to throw when row conversion is more robust.  Right
+      // now this only means preview will not be populated for the current Engine impl.
+      logDebug( e.getMessage() );
+    }
+    */
+  }
+}

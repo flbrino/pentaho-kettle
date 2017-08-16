@@ -43,21 +43,27 @@ public final class ExecutionRequest implements Message {
   private static final long serialVersionUID = -7835121168360407191L;
 
   // Unique Request ID (used in discovery / retry logic)
-  private final String requestId;
-  private final Map<String, Object> parameters;
-  private final Map<String, Object> environment;
-  private final Transformation transformation;
-  private final Map<String, Set<Class<? extends Serializable>>> reportingTopics;
+  private String requestId;
+  private Map<String, Object> parameters;
+  private Map<String, Object> environment;
+  private Transformation transformation;
+  private Map<String, Set<Class<? extends Serializable>>> reportingTopics;
 
 
   private final Principal actingPrincipal;
   private LogLevel loggingLogLevel;
 
-  public ExecutionRequest( Map<String, Object> parameters, Map<String, Object> environment,
-                           Transformation transformation,
-                           Map<String, Set<Class<? extends Serializable>>> reportingTopics,
-                           LogLevel loggingLogLevel,
-                           Principal actingPrincipal ) {
+  public ExecutionRequest(Transformation transformation) {
+    this.transformation = transformation;
+    //TODO: set actingPrincipal
+    this.actingPrincipal = null;
+  }
+
+  public ExecutionRequest(Map<String, Object> parameters, Map<String, Object> environment,
+                          Transformation transformation,
+                          Map<String, Set<Class<? extends Serializable>>> reportingTopics,
+                          LogLevel loggingLogLevel,
+                          Principal actingPrincipal) {
     this.requestId = UUID.randomUUID().toString();
     this.parameters = parameters;
     this.environment = environment;
@@ -93,5 +99,29 @@ public final class ExecutionRequest implements Message {
 
   public LogLevel getLoggingLogLevel() {
     return loggingLogLevel;
+  }
+
+  public void setRequestId(String requestId) {
+    this.requestId = requestId;
+  }
+
+  public void setParameters(Map<String, Object> parameters) {
+    this.parameters = parameters;
+  }
+
+  public void setEnvironment(Map<String, Object> environment) {
+    this.environment = environment;
+  }
+
+  public void setTransformation(Transformation transformation) {
+    this.transformation = transformation;
+  }
+
+  public void setReportingTopics(Map<String, Set<Class<? extends Serializable>>> reportingTopics) {
+    this.reportingTopics = reportingTopics;
+  }
+
+  public void setLoggingLogLevel(LogLevel loggingLogLevel) {
+    this.loggingLogLevel = loggingLogLevel;
   }
 }
