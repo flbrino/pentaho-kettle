@@ -130,6 +130,7 @@ import org.pentaho.di.trans.TransExecutionConfiguration;
 import org.pentaho.di.trans.TransHopMeta;
 import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.TransPainter;
+import org.pentaho.di.trans.TransSupplier;
 import org.pentaho.di.trans.ael.adapters.TransEngineAdapter;
 import org.pentaho.di.trans.ael.websocket.TransWebSocketEngineAdapter;
 import org.pentaho.di.trans.debug.BreakPointListener;
@@ -3805,7 +3806,7 @@ public class TransGraph extends AbstractGraph implements XulEventHandler, Redraw
           // memory
           // To be able to completely test this, we need to run it as we would normally do in pan
           //
-          trans = createTrans();
+          trans = new TransSupplier( transMeta, log, this::createLegacyTrans ).get();
 
           trans.setRepository( spoon.getRepository() );
           trans.setMetaStore( spoon.getMetaStore() );
@@ -5007,69 +5008,12 @@ public class TransGraph extends AbstractGraph implements XulEventHandler, Redraw
     return trans;
   }
 
-  /**
-   * Creates the appropriate trans.  Either
-   * 1)  A {@link TransEngineAdapter} wrapping an {@link Engine}
-   * if an alternate execution engine has been selected
-   * 2)  A legacy {@link Trans} otherwise.
-   */
-  private Trans createTrans() throws KettleException {
-    if ( Utils.isEmpty( transMeta.getVariable( "engine" ) ) ) {
-      log.logBasic( "Using legacy execution engine" );
-      return createLegacyTrans();
-    }
-
-    Variables variables = new Variables();
-    variables.initializeVariablesFrom( null );
-    //default for now is AEL Engine RSA
-    String version = variables.getVariable( "KETTLE_AEL_PDI_DAEMON_VERSION", "1.0" );
-    if ( Const.toDouble( version, 1 ) >= 2 ) {
-      String host = transMeta.getVariable( "engine.host" );
-      String port = transMeta.getVariable( "engine.port" );
-      //TODO: we have
-      boolean ssl = false;
-      return new TransWebSocketEngineAdapter( transMeta, host, port, ssl );
-    } else {
-      return PluginRegistry.getInstance().getPlugins( EnginePluginType.class ).stream()
-        .filter( useThisEngine() )
-        .findFirst()
-        .map( plugin -> (Engine) loadPlugin( plugin ) )
-        .map( engine -> {
-          log.logBasic( "Using execution engine " + engine.getClass().getCanonicalName() );
-          return (Trans) new TransEngineAdapter( engine, transMeta );
-        } )
-        .orElseThrow(
-          () -> new KettleException( "Unable to find engine [" + transMeta.getVariable( "engine" ) + "]" ) );
-    }
-  }
-
-  /**
-   * Uses a trans variable called "engine" to determine which engine to use.
-   * Will be replaced when UI engine selection is available.
-   *
-   * @return
-   */
-  private Predicate<PluginInterface> useThisEngine() {
-    return plugin -> Arrays.stream( plugin.getIds() )
-      .filter( id -> id.equals( ( transMeta.getVariable( "engine" ) ) ) )
-      .findAny()
-      .isPresent();
-  }
-
   private Trans createLegacyTrans() {
     try {
       return new Trans( transMeta, spoon.rep, transMeta.getName(),
         transMeta.getRepositoryDirectory().getPath(),
         transMeta.getFilename() );
     } catch ( KettleException e ) {
-      throw new RuntimeException( e );
-    }
-  }
-
-  private Object loadPlugin( PluginInterface plugin ) {
-    try {
-      return PluginRegistry.getInstance().loadClass( plugin );
-    } catch ( KettlePluginException e ) {
       throw new RuntimeException( e );
     }
   }

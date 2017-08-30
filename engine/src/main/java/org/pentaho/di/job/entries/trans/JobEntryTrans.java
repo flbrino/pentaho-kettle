@@ -83,6 +83,7 @@ import org.pentaho.di.resource.ResourceReference;
 import org.pentaho.di.trans.Trans;
 import org.pentaho.di.trans.TransExecutionConfiguration;
 import org.pentaho.di.trans.TransMeta;
+import org.pentaho.di.trans.TransSupplier;
 import org.pentaho.di.trans.ael.adapters.TransEngineAdapter;
 import org.pentaho.di.trans.cluster.TransSplitter;
 import org.pentaho.di.trans.step.StepMeta;
@@ -1103,7 +1104,9 @@ public class JobEntryTrans extends JobEntryBase implements Cloneable, JobEntryIn
           // Create the transformation from meta-data
           //
           //trans = new Trans( transMeta, this );
-          trans = createTrans( transMeta );
+          //trans = createTrans( transMeta );
+          final TransMeta meta = transMeta;
+          trans = new TransSupplier( transMeta, log, () -> new Trans( meta ) ).get();
           trans.setParent( this );
 
           // Pass the socket repository as early as possible...
@@ -1650,50 +1653,6 @@ public class JobEntryTrans extends JobEntryBase implements Cloneable, JobEntryIn
   @Override
   public Object loadReferencedObject( int index, Repository rep, IMetaStore metaStore, VariableSpace space ) throws KettleException {
     return getTransMeta( rep, metaStore, space );
-  }
-
-  /**
-   * Creates the appropriate trans.  Either
-   * 1)  A {@link TransEngineAdapter} wrapping an {@link Engine}
-   * if an alternate execution engine has been selected
-   * 2)  A legacy {@link Trans} otherwise.
-   */
-  private Trans createTrans( TransMeta transMeta ) throws KettleException {
-    if ( Utils.isEmpty( transMeta.getVariable( "engine" ) ) ) {
-      log.logBasic( "Using legacy execution engine" );
-      return new Trans( transMeta );
-    }
-
-    return PluginRegistry.getInstance().getPlugins( EnginePluginType.class ).stream()
-      .filter( useThisEngine( transMeta ) )
-      .findFirst()
-      .map( plugin -> (Engine) loadPlugin( plugin ) )
-      .map( engine -> {
-        log.logBasic( "Using execution engine " + engine.getClass().getCanonicalName() );
-        return (Trans) new TransEngineAdapter( engine, transMeta );
-      } )
-      .orElseThrow( () -> new KettleException( "Unable to find engine [" + transMeta.getVariable( "engine" ) + "]" ) );
-  }
-
-  /**
-   * Uses a trans variable called "engine" to determine which engine to use.
-   * Will be replaced when UI engine selection is available.
-   *
-   * @return
-   */
-  private Predicate<PluginInterface> useThisEngine( TransMeta transMeta ) {
-    return plugin -> Arrays.stream( plugin.getIds() )
-      .filter( id -> id.equals( ( transMeta.getVariable( "engine" ) ) ) )
-      .findAny()
-      .isPresent();
-  }
-
-  private Object loadPlugin( PluginInterface plugin ) {
-    try {
-      return PluginRegistry.getInstance().loadClass( plugin );
-    } catch ( KettlePluginException e ) {
-      throw new RuntimeException( e );
-    }
   }
 
 }

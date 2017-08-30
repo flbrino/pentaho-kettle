@@ -26,7 +26,6 @@ package org.pentaho.di.trans.ael.websocket;
 
 import org.pentaho.di.core.exception.KettleException;
 import org.pentaho.di.core.logging.LogChannelInterface;
-import org.pentaho.di.engine.api.ExecutionResult;
 import org.pentaho.di.engine.api.events.PDIEvent;
 import org.pentaho.di.engine.api.model.Operation;
 import org.pentaho.di.engine.api.model.Transformation;
@@ -54,8 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Function;
 import java.util.Collection;
 
@@ -83,9 +81,8 @@ public class TransWebSocketEngineAdapter extends Trans {
   private final String port;
   private final boolean ssl;
 
-  private CompletableFuture<ExecutionResult>
-    executionResultFuture;
-
+  //completion signal used to wait until Transformation is finished
+  CountDownLatch transFinishedSignal = new CountDownLatch( 1 );
 
   public static final Map<org.pentaho.di.core.logging.LogLevel, LogLevel> LEVEL_MAP = new HashMap<>();
 
@@ -306,6 +303,8 @@ public class TransWebSocketEngineAdapter extends Trans {
           } catch ( KettleException e ) {
             getLogChannel().logError( "Error finalizing", e );
           }
+          // Signal for the the waitUntilFinished blocker...
+          transFinishedSignal.countDown();
         }
 
         @Override
@@ -343,14 +342,11 @@ public class TransWebSocketEngineAdapter extends Trans {
 
   @Override public void waitUntilFinished() {
     try {
-      ExecutionResult result = executionResultFuture.get();
+      transFinishedSignal.await();
     } catch ( InterruptedException e ) {
       throw new RuntimeException( "Waiting for transformation to be finished interrupted!", e );
-    } catch ( ExecutionException e ) {
-      throw new RuntimeException( "Error executing Transformation or waiting for it to stop", e );
     }
   }
-
 
   // ======================== May want to implement ================================= //
 
