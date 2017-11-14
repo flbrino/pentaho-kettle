@@ -57,16 +57,20 @@ public class DaemonMessagesClientEndpoint extends Endpoint {
   private Session userSession = null;
   private String principal = null;
   private String keytab = null;
+  private String service = null;
   //only one stop message
   private AtomicBoolean alReadySendedStopMessage =  new AtomicBoolean( false );
 
   public DaemonMessagesClientEndpoint( String host, String port, boolean ssl,
                                        MessageEventService messageEventService ) throws KettleException {
     try {
-      String url = ( ssl ? PRFX_WS_SSL : PRFX_WS ) + host + ":" + port + "/execution";
+      setAuthProperties();
+
+      String url =
+        ( ssl ? PRFX_WS_SSL : PRFX_WS ) + host + ":" + port + ( ( service == null || service.length() == 0 ) ?
+          "/execution" : "/" + service );
       URI uri = new URI( url );
       this.messageEventService = messageEventService;
-      setAuthProperties();
 
       WebSocketContainer container = ContainerProvider.getWebSocketContainer();
       container.connectToServer( this, ClientEndpointConfig.Builder.create()
@@ -87,6 +91,7 @@ public class DaemonMessagesClientEndpoint extends Endpoint {
 
     this.principal = variables.getVariable( "KETTLE_AEL_PDI_DAEMON_PRINCIPAL", null );
     this.keytab = variables.getVariable( "KETTLE_AEL_PDI_DAEMON_KEYTAB", null );
+    this.service = variables.getVariable( "KETTLE_AEL_PDI_DAEMON_SERVICE", null );
   }
 
   /**
