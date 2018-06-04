@@ -340,6 +340,10 @@ public class LoggingBuffer {
     eventListeners.remove( listener );
   }
 
+  public List<KettleLoggingEventListener> getEventListeners() {
+    return eventListeners;
+  }
+
   private boolean isGeneral( String logChannelId ) {
     LoggingObjectInterface loggingObject = loggingRegistry.getLoggingObject( logChannelId );
     return loggingObject != null && LoggingObjectType.GENERAL.equals( loggingObject.getObjectType() );
